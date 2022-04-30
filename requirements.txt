@@ -1,0 +1,6 @@
+asyncio
+websockets
+requests
+configparser
+psycopg2
+pandas
