@@ -2,7 +2,7 @@ CREATE TYPE chain_status_type AS ENUM ('canonical', 'orphaned', 'pending');
 
 CREATE TABLE blocks (
     id SERIAL PRIMARY KEY,
-    height INT NOT NULL,
+    block_height INT NOT NULL,
     chain_status chain_status_type NOT NULL,
     creator TEXT NOT NULL,
     block_hash TEXT UNIQUE NOT NULL,
@@ -23,9 +23,9 @@ CREATE TABLE blocks (
 
 CREATE TABLE transactions (
     id SERIAL PRIMARY KEY,
-    height INT NOT NULL,
+    block_height INT NOT NULL,
     block_hash TEXT NOT NULL,
-    state_hash TEXT NOT NULL,
+    state_hash TEXT UNIQUE NOT NULL,
     chain_status chain_status_type NOT NULL,
     kind TEXT NOT NULL,
     source TEXT NOT NULL,
@@ -42,7 +42,7 @@ CREATE TABLE transactions (
 
 CREATE TABLE fee_transfers (
     id SERIAL PRIMARY KEY,
-    height INT NOT NULL,
+    block_height INT NOT NULL,
     block_hash TEXT NOT NULL,
     chain_status chain_status_type NOT NULL,
     receiver TEXT NOT NULL,
@@ -55,7 +55,7 @@ CREATE TABLE balances (
     balance BIGINT NOT NULL,
     locked BIGINT,
     liquid BIGINT,
-    blockheight INT NOT NULL,
+    block_height INT NOT NULL,
     block_hash TEXT NOT NULL,
     chain_status chain_status_type NOT NULL
     )

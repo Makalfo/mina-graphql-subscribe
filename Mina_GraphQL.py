@@ -3,6 +3,7 @@ import logging
 import asyncio
 import configparser
 import json
+import time
 import warnings
 import psycopg2
 import pandas as pd
@@ -39,6 +40,16 @@ class MinaGraphQL:
         # get the client
         self.client = Client( graphql_host=self.config['GraphQL']['host'], graphql_port=self.config['GraphQL']['port'] )
 
+        # get the sync status
+        sync_status = self.client.get_sync_status()['syncStatus']
+        self.logger.info( f"Sync Status {sync_status}..." )
+        while sync_status != 'SYNCED':
+            self.logger.info( f"Sync Status {sync_status} - Sleeping for { self.config[ 'Config' ][ 'sleep_time' ] } Seconds" )
+            time.sleep( int( self.config[ 'Config' ][ 'sleep_time' ] ) )
+            sync_status = self.client.get_sync_status()['syncStatus']
+        
+        self.logger.info( f"Sync Status {sync_status}! Running async runner for GraphQL!" )
+
         # run the block listener        
         asyncio.run(self.client.listen_new_blocks( self.parse_data ))
 
@@ -59,7 +70,8 @@ class MinaGraphQL:
             host =      info[ 'host' ],
             port =      info[ 'port' ] )
         # set isolation level
-        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT);
+        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        self.logger.info( f"Connected to Database {info[ 'database' ]}!")
         return conn
 
     def parse_data( self, data ) :
@@ -85,7 +97,7 @@ class MinaGraphQL:
         timestamp =             data['protocolState']['blockchainState']['date']
         snarked_ledger_hash =   data['protocolState']['blockchainState']['snarkedLedgerHash']
         staged_ledger_hash =    data['protocolState']['blockchainState']['stagedLedgerHash']
-        height =                data['protocolState']['consensusState']['blockHeight']
+        block_height =                data['protocolState']['consensusState']['blockHeight']
         epoch =                 data['protocolState']['consensusState']['epoch']
         slot =                  data['protocolState']['consensusState']['slot']
         slot_since_genesis =    data['protocolState']['consensusState']['slotSinceGenesis']
@@ -98,32 +110,32 @@ class MinaGraphQL:
         num_fee_tx   =          len( data['transactions']['feeTransfer'] ) if 'feeTransfer' in data['transactions'].keys() else 0
         
         # check if it is in the best chain
-        if int(height) in best_chain.keys():
-            if best_chain[int(height)] == block_hash:
+        if int(block_height) in best_chain.keys():
+            if best_chain[int(block_height)] == block_hash:
                 chain_status = 'canonical'
             else:
                 chain_status = 'orphaned'
 
         # log the parsing info
-        self.logger.info( f"Parsing New Block {height} with Hash {block_hash} Created by {creator} [{chain_status}]")
+        self.logger.info( f"Parsing New Block {block_height} with Hash {block_hash} Created by {creator} [{chain_status}]")
 
         # build and insert
-        block_data = ( height, chain_status, creator, block_hash, parent_hash, timestamp, coinbase_amount, coinbase_receiver, snarked_ledger_hash, staged_ledger_hash, epoch, slot, slot_since_genesis, total_currency, num_tx, num_fee_tx, num_zkapp_tx )
+        block_data = ( block_height, chain_status, creator, block_hash, parent_hash, timestamp, coinbase_amount, coinbase_receiver, snarked_ledger_hash, staged_ledger_hash, epoch, slot, slot_since_genesis, total_currency, num_tx, num_fee_tx, num_zkapp_tx )
         self.insert_block( block_data )
 
         # insert the creator and coinbase receiver balance
-        creator_data = ( creator, data['creatorAccount']['balance']['total'], data['creatorAccount']['balance']['locked'], data['creatorAccount']['balance']['liquid'], height, block_hash, chain_status )
+        creator_data = ( creator, data['creatorAccount']['balance']['total'], data['creatorAccount']['balance']['locked'], data['creatorAccount']['balance']['liquid'], block_height, block_hash, chain_status )
         self.insert_balance( creator_data )
-        coinbase_data = ( coinbase_receiver, data['transactions']['coinbaseReceiverAccount']['balance']['total'], data['transactions']['coinbaseReceiverAccount']['balance']['locked'], data['transactions']['coinbaseReceiverAccount']['balance']['liquid'], height, block_hash, chain_status )
+        coinbase_data = ( coinbase_receiver, data['transactions']['coinbaseReceiverAccount']['balance']['total'], data['transactions']['coinbaseReceiverAccount']['balance']['locked'], data['transactions']['coinbaseReceiverAccount']['balance']['liquid'], block_height, block_hash, chain_status )
         self.insert_balance( coinbase_data )
 
         # parse the transactions
-        self.parse_transactions( height, block_hash, chain_status, data['transactions'] )
+        self.parse_transactions( block_height, block_hash, chain_status, data['transactions'] )
 
         # go back to previous blockheights and change if necessary
         self.check_reorganization( best_chain )
 
-    def parse_transactions( self, height, block_hash, chain_status, transactions ):
+    def parse_transactions( self, block_height, block_hash, chain_status, transactions ):
         '''parses the transactions in the graphql response'''
 
         balances = {}
@@ -132,7 +144,7 @@ class MinaGraphQL:
             sender =    tx['source']['publicKey']
             receiver =  tx['receiver']['publicKey']
             feePayer =  tx['feePayer']['publicKey']
-            tx_data = ( height, block_hash, tx['hash'], chain_status, tx['kind'], sender, receiver, feePayer, tx['token'], tx['feeToken'], tx['amount'], tx['fee'], tx['memo'], tx['nonce'], tx['failureReason'] )
+            tx_data = ( block_height, block_hash, tx['hash'], chain_status, tx['kind'], sender, receiver, feePayer, tx['token'], tx['feeToken'], tx['amount'], tx['fee'], tx['memo'], tx['nonce'], tx['failureReason'] )
             self.insert_transaction( tx_data )
 
             # store the balances
@@ -148,12 +160,12 @@ class MinaGraphQL:
 
         # fee transactions
         for tx in transactions['feeTransfer']:
-            tx_data = ( height, block_hash, chain_status, tx['recipient'], tx['fee'] )
+            tx_data = ( block_height, block_hash, chain_status, tx['recipient'], tx['fee'] )
             self.insert_fee_transfer( tx_data )
 
         # update the balances
         for public_key in balances.keys():
-            balance_data = ( public_key, balances[public_key]['balance'], balances[public_key]['locked'], balances[public_key]['liquid'], height, block_hash, chain_status )
+            balance_data = ( public_key, balances[public_key]['balance'], balances[public_key]['locked'], balances[public_key]['liquid'], block_height, block_hash, chain_status )
             self.insert_balance( balance_data )        
 
     def parse_best_chain( self, best_chain ):
@@ -161,30 +173,30 @@ class MinaGraphQL:
         output = dict()
         if 'bestChain' in best_chain.keys():
             for item in best_chain['bestChain']:
-                blockheight = int( item[ 'protocolState' ][ 'consensusState' ][ 'blockHeight' ] )
+                block_height = int( item[ 'protocolState' ][ 'consensusState' ][ 'blockHeight' ] )
                 block_hash = item[ 'stateHash' ]
-                output[ blockheight ] = block_hash
+                output[ block_height ] = block_hash
         return output
 
     def check_reorganization( self, best_chain ):
         '''check for chain reorganizations'''
-        for blockheight in best_chain.keys():
-            block_hash = best_chain[blockheight]
-            # get the blocks for the height
-            blocks = self.get_block_state_status( blockheight )
-            # iterate through all the blocks at the height
+        for block_height in best_chain.keys():
+            block_hash = best_chain[block_height]
+            # get the blocks for the block_height
+            blocks = self.get_block_state_status( block_height )
+            # iterate through all the blocks at the block_height
             for index, block in blocks.iterrows():
                 chain_status = block['chain_status']
                 # check if both the state and parent hashes are in the best_chain
                 if block['block_hash'] == block_hash:
                     # verify it is canonical
                     if chain_status != 'canonical':
-                        self.logger.info( f"Updating Block {blockheight} {block['block_hash']} from {chain_status} to canonical" )
+                        self.logger.info( f"Updating Block {block_height} {block['block_hash']} from {chain_status} to canonical" )
                         self.update_block_state( block['block_hash'], 'canonical' )
                 else:
                     # verify it is orphaned
                     if chain_status != 'orphaned':
-                        self.logger.info( f"Updating Block {blockheight} {block['block_hash']} from {chain_status} to orphaned" )
+                        self.logger.info( f"Updating Block {block_height} {block['block_hash']} from {chain_status} to orphaned" )
                         self.update_block_state( block['block_hash'], 'orphaned' )
 
     def update_block_state( self, block_hash, chain_status ):
@@ -201,10 +213,10 @@ class MinaGraphQL:
             df = pd.concat([ df, chunk ])
         return df.fillna(0)
 
-    def get_block_state_status( self, blockheight ):
-        '''for the blockheight, get all the block hashs and chain status'''
+    def get_block_state_status( self, block_height ):
+        '''for the block_height, get all the block hashs and chain status'''
         query = """SELECT "block_hash","chain_status" FROM blocks
-                    WHERE "height" = '%s' """ % blockheight
+                    WHERE "block_height" = '%s' """ % block_height
         df = self.get_df_data( self.database, query ) 
         return df
 
@@ -212,7 +224,7 @@ class MinaGraphQL:
         '''insert the block'''
         self.logger.debug( f'Inserting Block: { data }' )
         cmd = """INSERT INTO blocks (
-            height,
+            block_height,
             chain_status,
             creator,
             block_hash,
@@ -240,7 +252,7 @@ class MinaGraphQL:
             '''insert the transaction'''
             self.logger.debug( f'Inserting Transaction: { data }' )
             cmd = """INSERT INTO transactions (
-                height,
+                block_height,
                 block_hash,
                 state_hash,
                 chain_status,
@@ -266,7 +278,7 @@ class MinaGraphQL:
         '''insert the fee transfer'''
         self.logger.debug( f'Inserting Fee Transfer: { data }' )
         cmd = """INSERT INTO fee_transfers (
-            height,
+            block_height,
             block_hash,
             chain_status,
             receiver,
@@ -286,7 +298,7 @@ class MinaGraphQL:
             balance,
             locked,
             liquid,
-            blockheight,
+            block_height,
             block_hash,
             chain_status
             ) VALUES (%s, %s, %s, %s, %s, %s, %s)
