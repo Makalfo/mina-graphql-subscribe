@@ -3,7 +3,7 @@
 docker build -t mina-graphql .
 
 # tag image
-docker tag mina-graphql localhost:5000/mina-graphql
+docker tag mina-graphql 192.168.4.2:5050/mina-graphql
 
 # push image
-docker push localhost:5000/mina-graphql:latest
+docker push 192.168.4.2:5050/mina-graphql:latest

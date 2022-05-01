@@ -23,7 +23,7 @@ class MinaGraphQL:
         self.mode = self.config['Config']['mode']
 
         # set logger basic config
-        if self.mode == 'debug':
+        if self.mode in [ 'debug', 'test' ]:
             log_level = logging.DEBUG
         else:
             log_level = logging.INFO
@@ -31,10 +31,6 @@ class MinaGraphQL:
                     format = '%(asctime)s.%(msecs)03d %(levelname)s: %(message)s',
                     level = log_level )
         self.logger = logging.getLogger(__name__)
-
-        #
-
-
 
         # connect to database
         self.database = self.connect_db( self.config[ self.config['Config']['database'] ] )
@@ -80,7 +76,7 @@ class MinaGraphQL:
     def parse_block( self, data ):
         '''Parses the block from the graphql'''
         # check for current best tip
-        best_chain = self.parse_best_chain( self.client.get_best_chain( 30 ) )
+        best_chain = self.parse_best_chain( self.client.get_best_chain( self.config['Config']['best_tip'] ) )
 
         # populate the fields
         creator =               data['creatorAccount']['publicKey']
@@ -116,9 +112,9 @@ class MinaGraphQL:
         self.insert_block( block_data )
 
         # insert the creator and coinbase receiver balance
-        creator_data = ( creator, data['creatorAccount']['balance']['total'], height, block_hash, chain_status )
+        creator_data = ( creator, data['creatorAccount']['balance']['total'], data['creatorAccount']['balance']['locked'], data['creatorAccount']['balance']['liquid'], height, block_hash, chain_status )
         self.insert_balance( creator_data )
-        coinbase_data = ( coinbase_receiver, data['transactions']['coinbaseReceiverAccount']['balance']['total'], height, block_hash, chain_status )
+        coinbase_data = ( coinbase_receiver, data['transactions']['coinbaseReceiverAccount']['balance']['total'], data['transactions']['coinbaseReceiverAccount']['balance']['locked'], data['transactions']['coinbaseReceiverAccount']['balance']['liquid'], height, block_hash, chain_status )
         self.insert_balance( coinbase_data )
 
         # parse the transactions
@@ -140,9 +136,15 @@ class MinaGraphQL:
             self.insert_transaction( tx_data )
 
             # store the balances
-            balances[ sender ] = tx['source']['balance']['total']
-            balances[ receiver ] = tx['receiver']['balance']['total']
-            balances[ feePayer ] = tx['feePayer']['balance']['total']
+            balances[ sender ] = {  'balance': tx['source']['balance']['total'],
+                                    'locked': tx['source']['balance']['locked'],
+                                    'liquid': tx['source']['balance']['liquid'] }
+            balances[ receiver ] = { 'balance': tx['receiver']['balance']['total'],
+                                     'locked': tx['receiver']['balance']['locked'],
+                                     'liquid': tx['receiver']['balance']['liquid'] }
+            balances[ feePayer ] = { 'balance': tx['feePayer']['balance']['total'],
+                                     'locked': tx['feePayer']['balance']['locked'],
+                                     'liquid': tx['feePayer']['balance']['liquid'] }
 
         # fee transactions
         for tx in transactions['feeTransfer']:
@@ -151,7 +153,7 @@ class MinaGraphQL:
 
         # update the balances
         for public_key in balances.keys():
-            balance_data = ( public_key, balances[public_key], height, block_hash, chain_status )
+            balance_data = ( public_key, balances[public_key]['balance'], balances[public_key]['locked'], balances[public_key]['liquid'], height, block_hash, chain_status )
             self.insert_balance( balance_data )        
 
     def parse_best_chain( self, best_chain ):
@@ -229,7 +231,7 @@ class MinaGraphQL:
             num_zkapp_transactions
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s )
             ON CONFLICT DO NOTHING"""
-        if self.mode == "nominal":
+        if self.mode in [ 'nominal', 'test' ]:
             self.cursor.execute( cmd, data )
         else:
             self.logger.debug( f'Block Not Inserted with Mode: {self.mode}' )
@@ -255,7 +257,7 @@ class MinaGraphQL:
                 failure
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING"""
-            if self.mode == "nominal":
+            if self.mode in [ 'nominal', 'test' ]:
                 self.cursor.execute( cmd, data )
             else:
                 self.logger.debug( f'Transaction Not Inserted with Mode: {self.mode}' )
@@ -271,7 +273,7 @@ class MinaGraphQL:
             amount
             ) VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT DO NOTHING"""
-        if self.mode == "nominal":
+        if self.mode in [ 'nominal', 'test' ]:
             self.cursor.execute( cmd, data )
         else:
             self.logger.debug( f'Fee Transfer Not Inserted with Mode: {self.mode}' )
@@ -282,12 +284,14 @@ class MinaGraphQL:
         cmd = """INSERT INTO balances (
             public_key,
             balance,
+            locked,
+            liquid,
             blockheight,
             block_hash,
             chain_status
-            ) VALUES (%s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT DO NOTHING"""
-        if self.mode == "nominal":
+        if self.mode in [ 'nominal', 'test' ]:
             self.cursor.execute( cmd, data )
         else:
             self.logger.debug( f'Balance Not Inserted with Mode: {self.mode}' )
@@ -299,7 +303,7 @@ class MinaGraphQL:
         cmd = """UPDATE blocks
             SET chain_status = %s
             WHERE "block_hash" = %s""" 
-        if self.mode == "nominal":
+        if self.mode in [ 'nominal', 'test' ]:
             self.cursor.execute( cmd, ( chain_status, block_hash ) )
         else:
             self.logger.debug( f'Chain Status Not Updated with Mode: {self.mode}' )
@@ -311,7 +315,7 @@ class MinaGraphQL:
         cmd = """UPDATE transactions
             SET chain_status = %s
             WHERE "block_hash" = %s""" 
-        if self.mode == "nominal":
+        if self.mode in [ 'nominal', 'test' ]:
             self.cursor.execute( cmd, ( chain_status, block_hash ) )
         else:
             self.logger.debug( f'Chain Status Not Updated with Mode: {self.mode}' )
@@ -323,7 +327,7 @@ class MinaGraphQL:
         cmd = """UPDATE fee_transfers
             SET chain_status = %s
             WHERE "block_hash" = %s""" 
-        if self.mode == "nominal":
+        if self.mode in [ 'nominal', 'test' ]:
             self.cursor.execute( cmd, ( chain_status, block_hash ) )
         else:
             self.logger.debug( f'Chain Status Not Updated with Mode: {self.mode}' )
@@ -335,7 +339,7 @@ class MinaGraphQL:
         cmd = """UPDATE balances
             SET chain_status = %s
             WHERE "block_hash" = %s""" 
-        if self.mode == "nominal":
+        if self.mode in [ 'nominal', 'test' ]:
             self.cursor.execute( cmd, ( chain_status, block_hash ) )
         else:
             self.logger.debug( f'Chain Status Not Updated with Mode: {self.mode}' )

@@ -653,6 +653,8 @@ class Client():
         creatorAccount {
           publicKey
           balance {
+            liquid
+            locked
             total
           }
         }
@@ -684,18 +686,24 @@ class Client():
             feePayer {
               publicKey
               balance {
+                liquid
+                locked
                 total
               }
             }
             source {
               publicKey
               balance {
+                liquid
+                locked
                 total
               }
             }
             receiver {
               publicKey
               balance {
+                liquid
+                locked
                 total
               }
             }
@@ -714,6 +722,8 @@ class Client():
           coinbaseReceiverAccount {
               publicKey
               balance {
+                liquid
+                locked
                 total
               }
             }

@@ -15,7 +15,7 @@ CREATE TABLE blocks (
     epoch BIGINT NOT NULL, 
     slot BIGINT NOT NULL, 
     global_slot_since_genesis BIGINT NOT NULL, 
-    total_currency BIGINT NOT NULL, 
+    total_currency BIGINT, 
     num_transactions BIGINT NOT NULL, 
     num_fee_transactions BIGINT NOT NULL, 
     num_zkapp_transactions BIGINT NOT NULL
@@ -53,6 +53,8 @@ CREATE TABLE balances (
     id SERIAL PRIMARY KEY,
     public_key TEXT NOT NULL,
     balance BIGINT NOT NULL,
+    locked BIGINT,
+    liquid BIGINT,
     blockheight INT NOT NULL,
     block_hash TEXT NOT NULL,
     chain_status chain_status_type NOT NULL
