@@ -1,4 +1,4 @@
-from CodaClient import Client
+from MinaGraphQL.MinaClient import Client
 import logging 
 import asyncio
 import configparser

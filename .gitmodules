@@ -1,0 +1,3 @@
+[submodule "MinaGraphQL"]
+	path = MinaGraphQL
+	url = git@github.com:Makalfo/MinaGraphQL.git
