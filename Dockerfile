@@ -23,9 +23,10 @@ ENV TZ America/Denver
 # Copy Module Files
 ADD MinaGraphQL MinaGraphQL
 RUN pip3 install -r ./MinaGraphQL/requirements.txt
+ENV PYTHONUNBUFFERED=0
 
 # Copy the Main Script
 COPY Mina_GraphQL.py .
 
 # Run Bot
-CMD ["python3", "Mina_GraphQL.py"]
+CMD ["python3", "-u", "Mina_GraphQL.py"]

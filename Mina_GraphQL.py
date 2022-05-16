@@ -28,8 +28,7 @@ class MinaGraphQL:
             log_level = logging.DEBUG
         else:
             log_level = logging.INFO
-        logging.basicConfig( filename = 'output.log',
-                    format = '%(asctime)s.%(msecs)03d %(levelname)s: %(message)s',
+        logging.basicConfig(format = '%(asctime)s.%(msecs)03d %(levelname)s: %(message)s',
                     level = log_level )
         self.logger = logging.getLogger(__name__)
 

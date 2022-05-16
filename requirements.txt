@@ -4,3 +4,4 @@ requests
 configparser
 psycopg2
 pandas
+asyncpg
