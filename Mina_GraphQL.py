@@ -3,6 +3,7 @@ import logging
 import asyncio
 import configparser
 import json
+import sys
 import time
 import warnings
 import psycopg2
@@ -42,11 +43,12 @@ class MinaGraphQL:
         # get the sync status
         sync_status = self.client.get_sync_status()['syncStatus']
         self.logger.info( f"Sync Status {sync_status}..." )
-        while sync_status != 'SYNCED':
-            self.logger.info( f"Sync Status {sync_status} - Sleeping for 5 Seconds" )
-            time.sleep( 5 )
-            sync_status = self.client.get_sync_status()['syncStatus']
-        
+        if sys.getenv('SKIP_SYNC_CHECK'):
+            while sync_status != 'SYNCED':
+                self.logger.info( f"Sync Status {sync_status} - Sleeping for 5 Seconds" )
+                time.sleep( 5 )
+                sync_status = self.client.get_sync_status()['syncStatus']
+            
         self.logger.info( f"Sync Status {sync_status}! Running async runner for GraphQL!" )
 
         # run the block listener        
