@@ -14,12 +14,7 @@ warnings.filterwarnings("ignore")
 
 class MinaGraphQL:
     '''Mina GraphQL Script for subscribing to the GraphQL and adding new blocks'''
-    def __init__( self, config_file='config.ini' ):
-        # file names
-        self.files = {  'config': config_file }
-
-        # read config file
-        self.config = self.read_config( )
+    def __init__( self ):
 
         # set mode
         self.mode = 'nominal'
@@ -34,11 +29,17 @@ class MinaGraphQL:
         self.logger = logging.getLogger(__name__)
 
         # connect to database
-        self.database = self.connect_db( self.config[ 'Mainnet' ] )
+        self.database = self.connect_db( {
+            'database':  os.getenv('MAINNET_DATABASE'),
+            'host': os.getenv('MAINNET_HOST'),
+            'port': os.getenv('MAINNET_PORT'),
+            'user': os.getenv('MAINNET_USER'),
+            'password': os.getenv('MAINNET_PASSWORD'),
+        } )
         self.cursor = self.database.cursor()
 
         # get the client
-        self.client = Client( graphql_host=self.config['GraphQL']['host'], graphql_port=self.config['GraphQL']['port'] )
+        self.client = Client( graphql_host=os.getenv('GRAPHQL_HOST'), graphql_port=os.getenv('GRAPHQL_PORT') )
 
         # get the sync status
         sync_status = self.client.get_sync_status()['syncStatus']
@@ -53,12 +54,6 @@ class MinaGraphQL:
 
         # run the block listener        
         asyncio.run(self.client.listen_new_blocks( self.parse_data ))
-
-    def read_config( self ):
-        '''read the config file'''
-        config = configparser.ConfigParser(interpolation=None)
-        config.read( self.files[ 'config' ] )
-        return config
 
     def connect_db( self, info ):
         '''establish the postgres'''
@@ -89,7 +84,7 @@ class MinaGraphQL:
     def parse_block( self, data ):
         '''Parses the block from the graphql'''
         # check for current best tip
-        best_chain = self.parse_best_chain( self.client.get_best_chain( 290 ) )
+        best_chain = self.parse_best_chain( self.client.get_best_chain( os.getenv('BEST_CHAIN') ) )
 
         # populate the fields
         creator =               data['creatorAccount']['publicKey']
