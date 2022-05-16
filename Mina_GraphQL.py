@@ -21,7 +21,7 @@ class MinaGraphQL:
         self.config = self.read_config( )
 
         # set mode
-        self.mode = self.config['Config']['mode']
+        self.mode = 'nominal'
 
         # set logger basic config
         if self.mode in [ 'debug', 'test' ]:
@@ -34,7 +34,7 @@ class MinaGraphQL:
         self.logger = logging.getLogger(__name__)
 
         # connect to database
-        self.database = self.connect_db( self.config[ self.config['Config']['database'] ] )
+        self.database = self.connect_db( self.config[ 'Mainnet' ] )
         self.cursor = self.database.cursor()
 
         # get the client
@@ -44,8 +44,8 @@ class MinaGraphQL:
         sync_status = self.client.get_sync_status()['syncStatus']
         self.logger.info( f"Sync Status {sync_status}..." )
         while sync_status != 'SYNCED':
-            self.logger.info( f"Sync Status {sync_status} - Sleeping for { self.config[ 'Config' ][ 'sleep_time' ] } Seconds" )
-            time.sleep( int( self.config[ 'Config' ][ 'sleep_time' ] ) )
+            self.logger.info( f"Sync Status {sync_status} - Sleeping for 5 Seconds" )
+            time.sleep( 5 )
             sync_status = self.client.get_sync_status()['syncStatus']
         
         self.logger.info( f"Sync Status {sync_status}! Running async runner for GraphQL!" )
@@ -88,7 +88,7 @@ class MinaGraphQL:
     def parse_block( self, data ):
         '''Parses the block from the graphql'''
         # check for current best tip
-        best_chain = self.parse_best_chain( self.client.get_best_chain( self.config['Config']['best_tip'] ) )
+        best_chain = self.parse_best_chain( self.client.get_best_chain( 290 ) )
 
         # populate the fields
         creator =               data['creatorAccount']['publicKey']

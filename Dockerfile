@@ -20,8 +20,11 @@ RUN pip3 install -r requirements.txt
 RUN apk add --no-cache tzdata
 ENV TZ America/Denver
 
-# Copy Python Files
-COPY CodaClient.py .
+# Copy Module Files
+ADD MinaGraphQL MinaGraphQL
+RUN pip3 install -r ./MinaGraphQL/requirements.txt
+
+# Copy the Main Script
 COPY Mina_GraphQL.py .
 
 # Run Bot

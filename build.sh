@@ -1,9 +1,9 @@
 
 # build image
-docker build -t mina-graphql .
+docker build -t mina-graphql-subscribe .
 
 # tag image
-docker tag mina-graphql 192.168.4.2:5050/mina-graphql
+docker tag mina-graphql-subscribe makalfe/mina-graphql-subscribe
 
 # push image
-docker push 192.168.4.2:5050/mina-graphql:latest
+docker push mina-graphql-subscribe:latest
