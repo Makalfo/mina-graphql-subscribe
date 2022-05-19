@@ -16,8 +16,10 @@ class MinaGraphQL:
     '''Mina GraphQL Script for subscribing to the GraphQL and adding new blocks'''
     def __init__( self ):
 
-        # set mode
-        self.mode = 'nominal'
+        # log levels and mode
+        self.mode = os.getenv('MODE')
+        if self.mode == None:
+            self.mode = 'nominal'
 
         # set logger basic config
         if self.mode in [ 'debug', 'test' ]:
